@@ -3,17 +3,132 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Block Dodger</title>
+<link rel="icon" href="data:,">
+<title>Neon Bay — Open World</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
-  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  /* Read aloud, never shown: the status line screen readers announce. */
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1e2e;
+    font-family: "Segoe UI", system-ui, sans-serif; color: #fff; }
+  #app { position: fixed; inset: 0; }
+  #gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #hud { position: absolute; inset: 0; pointer-events: none; display: none; }
+  #hud.on { display: block; }
+  .panel { background: rgba(8, 18, 30, 0.62); border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 10px; padding: 8px 12px; backdrop-filter: blur(2px); }
+  #stats { position: absolute; top: 12px; left: 12px; min-width: 210px; }
+  #healthbar { height: 12px; background: rgba(255,255,255,0.18); border-radius: 6px; overflow: hidden; margin: 5px 0 2px; }
+  #healthfill { height: 100%; width: 100%; background: linear-gradient(90deg, #37e08b, #7dffb0); border-radius: 6px; }
+  #cash { font-size: 20px; font-weight: 700; color: #7dffb0; text-shadow: 0 1px 3px #000; }
+  #armorline { font-size: 12px; color: #cfe8ff; opacity: 0.9; }
+  #wanted { position: absolute; top: 12px; right: 12px; font-size: 30px; letter-spacing: 4px;
+    color: #ffd23e; text-shadow: 0 0 10px rgba(0,0,0,0.8), 0 2px 2px #000; }
+  #wanted .dim { color: rgba(255,255,255,0.25); text-shadow: none; }
+  #objective { position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    text-align: center; max-width: 520px; }
+  #objTitle { font-size: 15px; font-weight: 700; color: #ffd23e; letter-spacing: 1px; text-transform: uppercase; }
+  #objText { font-size: 14px; color: #fff; text-shadow: 0 1px 3px #000; }
+  #minimapWrap { position: absolute; right: 12px; bottom: 32px; }
+  #minimap { display: block; border-radius: 50%; border: 3px solid rgba(255,255,255,0.55);
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.45), 0 4px 18px rgba(0,0,0,0.5); background: #0d2733; }
+  #minimapLabel { position: absolute; left: 50%; transform: translateX(-50%); bottom: -18px;
+    font-size: 11px; letter-spacing: 2px; color: #cfe8ff; text-shadow: 0 1px 2px #000; }
+  #hint { position: absolute; left: 12px; bottom: 12px; font-size: 12px; color: #dceeff;
+    text-shadow: 0 1px 2px #000; line-height: 1.5; }
+  #crosshair { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px;
+    transform: translate(-50%, -50%); display: none; }
+  #crosshair::before, #crosshair::after { content: ""; position: absolute; background: #fff;
+    box-shadow: 0 0 3px #000; }
+  #crosshair::before { left: 10px; top: 0; width: 2px; height: 22px; }
+  #crosshair::after { left: 0; top: 10px; width: 22px; height: 2px; }
+  #toast { position: absolute; left: 50%; top: 24%; transform: translateX(-50%);
+    font-size: 26px; font-weight: 800; color: #ffd23e; text-shadow: 0 2px 8px #000, 0 0 22px rgba(255,210,62,0.5);
+    text-align: center; display: none; letter-spacing: 1px; }
+  #toast small { display: block; font-size: 15px; color: #fff; font-weight: 600; margin-top: 4px; }
+  #vignette { position: absolute; inset: 0; pointer-events: none; opacity: 0;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(255,0,0,0.55) 100%); }
+  #speedo { position: absolute; right: 216px; bottom: 16px; font-size: 26px; font-weight: 800;
+    color: #fff; text-shadow: 0 2px 4px #000; display: none; }
+  #speedo small { font-size: 12px; font-weight: 600; color: #cfe8ff; }
+  .screen { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(180deg, rgba(6,20,38,0.25) 0%, rgba(6,20,38,0.82) 78%); z-index: 5; }
+  .card { max-width: 620px; width: calc(100% - 40px); text-align: center; padding: 28px 30px 24px;
+    background: rgba(7, 22, 38, 0.78); border: 1px solid rgba(255,210,62,0.45); border-radius: 16px;
+    box-shadow: 0 12px 50px rgba(0,0,0,0.6); }
+  .card h1 { margin: 0; font-size: 54px; letter-spacing: 6px; color: #ffd23e;
+    text-shadow: 0 0 26px rgba(255,180,40,0.65), 0 3px 0 #7a2d8f; font-style: italic; }
+  .card h2 { margin: 2px 0 10px; font-size: 15px; letter-spacing: 5px; color: #7fe7ff; font-weight: 600; }
+  .card p { font-size: 14px; line-height: 1.55; color: #e8f4ff; margin: 8px 0; }
+  .card .controls { font-size: 13px; line-height: 1.9; color: #cfe8ff; background: rgba(255,255,255,0.06);
+    border-radius: 10px; padding: 10px; margin: 12px 0; text-align: left; columns: 2; }
+  .card .controls b { color: #ffd23e; }
+  .btn { pointer-events: auto; cursor: pointer; display: inline-block; margin: 6px 4px 0; padding: 12px 26px;
+    font-size: 16px; font-weight: 800; letter-spacing: 1px; color: #08131f; background: #ffd23e;
+    border: none; border-radius: 10px; box-shadow: 0 4px 0 #b98a00; }
+  .btn:active { transform: translateY(3px); box-shadow: none; }
+  .btn.ghost { background: transparent; color: #fff; border: 2px solid rgba(255,255,255,0.6); box-shadow: none; }
+  #pauseScreen, #wastedScreen { display: none; }
   #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 </style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.core.min.js" } }
+</script>
 </head>
 <body>
-<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
-<p id="status" role="status" aria-live="polite"></p>
+<div id="app">
+  <canvas id="gl" aria-label="Neon Bay: an open-world crime game. Drive, explore the city, take on missions and outrun the police."></canvas>
+  <div id="hud">
+    <div id="stats" class="panel">
+      <div id="cash">$0</div>
+      <div id="healthbar"><div id="healthfill"></div></div>
+      <div id="armorline">❤ HEALTH &nbsp;·&nbsp; <span id="ammo">PISTOL ∞</span> &nbsp;·&nbsp; <span id="carname"></span></div>
+    </div>
+    <div id="wanted"></div>
+    <div id="objective" class="panel"><div id="objTitle">Neon Bay</div><div id="objText"></div></div>
+    <div id="minimapWrap"><canvas id="minimap" width="180" height="180"></canvas><div id="minimapLabel">NEON BAY</div></div>
+    <div id="hint">WASD move / drive · SHIFT run · E steal car · SPACE jump / handbrake<br>F punch · CLICK shoot · M mute · ESC pause · H help</div>
+    <div id="crosshair"></div>
+    <div id="toast"></div>
+    <div id="speedo"></div>
+    <div id="vignette"></div>
+  </div>
+  <div id="titleScreen" class="screen">
+    <div class="card">
+      <h1>NEON BAY</h1>
+      <h2>AN OPEN-WORLD CRIME STORY</h2>
+      <p>You are <b>Jax Marlow</b>, a wheelman fresh out of the county lockup, back in the sun-soaked
+      port city of <b>Neon Bay</b>. The Harbor Kings run the docks, the Bay PD runs everything else,
+      and your old fixer <b>Ms. Vega</b> has three jobs that pay enough to buy your way out — if the
+      law doesn't catch you first.</p>
+      <div class="controls">
+        <div><b>W A S D</b> — move / drive</div><div><b>SHIFT</b> — sprint</div>
+        <div><b>E</b> — steal / enter / exit car</div><div><b>SPACE</b> — jump / handbrake</div>
+        <div><b>MOUSE + CLICK</b> — aim &amp; shoot</div><div><b>F</b> — punch</div>
+        <div><b>M</b> — mute sound</div><div><b>ESC</b> — pause / save</div>
+      </div>
+      <p>Steal cars, lose the cops, run Vega's missions and take the docks back — one star at a time.</p>
+      <button class="btn" id="btnStart">▶ START ENGINE</button>
+      <button class="btn ghost" id="btnContinue" style="display:none">CONTINUE SAVE</button>
+      <button class="btn ghost" id="btnMuteTitle">SOUND: ON</button>
+    </div>
+  </div>
+  <div id="pauseScreen" class="screen">
+    <div class="card">
+      <h1 style="font-size:40px">PAUSED</h1>
+      <p>Neon Bay waits for no one. Well — right now it does.</p>
+      <button class="btn" id="btnResume">RESUME</button>
+      <button class="btn ghost" id="btnSave">SAVE GAME</button>
+      <button class="btn ghost" id="btnRestart">RESTART STORY</button>
+      <button class="btn ghost" id="btnQuitTitle">QUIT TO TITLE</button>
+    </div>
+  </div>
+  <div id="wastedScreen" class="screen">
+    <div class="card">
+      <h1 style="font-size:40px;color:#ff5d5d;text-shadow:0 0 26px rgba(255,40,40,0.6)">WASTED</h1>
+      <p id="wastedText">The Bay PD scraped you off the boardwalk. You wake up at Mercy General, lighter in the pocket.</p>
+      <button class="btn" id="btnRespawn">GET BACK UP</button>
+    </div>
+  </div>
+  <p id="status" role="status" aria-live="polite"></p>
+</div>
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>
